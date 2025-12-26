@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuickMadu – Ultimate Party Edition</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: { hospital: '#119822', neon: '#39ff14' }
+        }
+      }
+    }
+  </script>
+</head>
+<body id="body" class="bg-gradient-to-br from-green-400 via-emerald-300 to-lime-200 min-h-screen flex items-center justify-center p-4">
+
+<!-- Audios (desbloqueados tras interacción del usuario) -->
+<audio id="tick" preload="auto" src="https://assets.mixkit.co/sfx/preview/mixkit-fast-tick-tock-1047.mp3"></audio>
+<audio id="success" preload="auto" src="https://assets.mixkit.co/sfx/preview/mixkit-achievement-bell-600.mp3"></audio>
+<audio id="win" preload="auto" src="https://assets.mixkit.co/sfx/preview/mixkit-game-level-completed-2059.mp3"></audio>
+
+<div class="bg-white/90 dark:bg-black/90 dark:text-neon backdrop-blur-xl w-full max-w-6xl rounded-3xl shadow-2xl p-6 border-4 border-emerald-400">
+
+<h1 class="text-4xl font-extrabold text-center mb-2">🎉 QuickMadu – Ultimate Party 🎉</h1>
+<p class="text-center mb-4">Todo el mundo juega. Todo vale. 💥</p>
+
+<div class="flex justify-center gap-2 mb-4">
+  <button onclick="toggleDarkMode()" class="px-4 py-2 rounded bg-black text-white">🌙 Modo Neón</button>
+</div>
+
+<!-- SETUP -->
+<div id="setup" class="space-y-4">
+  <h2 class="font-bold text-xl">👨‍👩‍👧‍👦 Jugadores</h2>
+  <input id="playerName" class="border rounded px-4 py-3 w-full" placeholder="Nombre del jugador" />
+  <button onclick="addPlayer()" class="bg-hospital text-white w-full py-3 rounded">➕ Añadir jugador</button>
+  <ul id="playerList"></ul>
+
+  <h3 class="font-bold mt-4">🃏 Editor de temas</h3>
+  <input id="newTheme" class="border rounded px-3 py-2 w-full" placeholder="Nuevo tema personalizado" />
+  <button onclick="addTheme()" class="bg-black text-white w-full py-2 rounded">Añadir tema</button>
+
+  <div id="qr" class="flex justify-center mt-4"></div>
+  <p class="text-center text-sm">📱 Escanea el QR para responder desde el móvil (modo demostrativo)</p>
+
+  <button onclick="startGame()" class="bg-black text-white w-full py-3 rounded font-bold">🚀 Empezar partida</button>
+</div>
+
+<!-- GAME -->
+<div id="game" class="hidden">
+  <div class="flex justify-between items-center mb-4">
+    <h2 id="theme" class="text-2xl font-extrabold"></h2>
+    <div id="timer" class="text-2xl font-black bg-black text-white px-5 py-2 rounded-full animate-bounce">⏱ 15</div>
+  </div>
+  <div id="letters" class="mb-4 p-4 rounded bg-emerald-50 dark:bg-gray-800"></div>
+  <input id="wordInput" class="border rounded px-4 py-3 w-full mb-2" placeholder="Respuesta" />
+  <button onclick="submitWord()" class="bg-hospital text-white w-full py-3 rounded">Enviar</button>
+  <div id="responses" class="mt-4"></div>
+</div>
+
+<!-- FINAL -->
+<div id="final" class="hidden text-center">
+  <h2 class="text-3xl font-extrabold mb-3">🏆 GANADOR</h2>
+  <p id="winner" class="text-3xl font-bold mb-4"></p>
+
+  <h3 class="font-bold mt-4">🥇 Ranking de la noche</h3>
+  <ul id="ranking" class="mt-2"></ul>
+
+  <div id="penalty" class="mt-6 bg-red-100 text-red-800 p-4 rounded-xl"></div>
+
+  <button onclick="location.reload()" class="mt-6 bg-hospital text-white px-6 py-3 rounded">🔁 Jugar otra vez</button>
+</div>
+
+</div>
+
+<script>
+// ================== CONFIGURACIÓN ==================
+const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+let themes = [
+  'Algo que hay en la cocina', 'Un animal', 'Algo que da miedo', 'Algo que te haga reír'
+];
+let players = [];
+let responses = [];
+let timeLeft = 15;
+let timer;
+let audioEnabled = false;
+
+// QR informativo: los móviles no pueden abrir archivos file:// del ordenador
+new QRCode(document.getElementById('qr'), {
+  text: 'Este QR es solo informativo. Para juego real en móviles necesitarías subir este HTML a un servidor o usar una red local.',
+  width: 180,
+  height: 180
+});
+
+// ================== AUDIO SEGURO ==================
+function safePlay(id) {
+  if (!audioEnabled) return;
+  const el = document.getElementById(id);
+  if (!el) return;
+  try {
+    el.currentTime = 0;
+    el.play().catch(()=>{});
+  } catch (e) {}
+}
+
+function unlockAudio() {
+  audioEnabled = true;
+  ['tick','success','win'].forEach(id => {
+    const a = document.getElementById(id);
+    if (a) {
+      a.muted = true;
+      a.play().then(() => {
+        a.pause();
+        a.currentTime = 0;
+        a.muted = false;
+      }).catch(()=>{});
+    }
+  });
+}
+
+// ================== UI ==================
+function toggleDarkMode() {
+  body.classList.toggle('dark');
+}
+
+// ================== JUGADORES ==================
+function addPlayer() {
+  const name = playerName.value.trim();
+  if (!name) return;
+  players.push({ name, letters: [], score: 0 });
+  playerName.value = '';
+  renderPlayers();
+}
+
+function renderPlayers() {
+  playerList.innerHTML = players.map(p => `<li>• ${p.name}</li>`).join('');
+}
+
+function addTheme() {
+  const t = newTheme.value.trim();
+  if (t) themes.push(t);
+  newTheme.value = '';
+}
+
+// ================== JUEGO ==================
+function startGame() {
+  if (players.length < 2) return alert('Mínimo 2 jugadores');
+  unlockAudio();
+  setup.classList.add('hidden');
+  game.classList.remove('hidden');
+  dealLetters();
+  nextRound();
+}
+
+function dealLetters() {
+  players.forEach(p => {
+    p.letters = [];
+    for (let i = 0; i < 5; i++) {
+      p.letters.push(alphabet[Math.floor(Math.random() * alphabet.length)]);
+    }
+  });
+}
+
+function nextRound() {
+  responses = [];
+  theme.textContent = '🎯 ' + themes[Math.floor(Math.random() * themes.length)];
+  letters.innerHTML = players.map(p => `<strong>${p.name}:</strong> ${p.letters.join(' ')}<br>`).join('');
+  responses.innerHTML = '';
+  startTimer();
+}
+
+function startTimer() {
+  clearInterval(timer);
+  timeLeft = 15;
+  timer = setInterval(() => {
+    safePlay('tick');
+    timeLeft--;
+    timerEl.textContent = '⏱ ' + timeLeft;
+    if (timeLeft <= 0) {
+      clearInterval(timer);
+      applyRound();
+    }
+  }, 1000);
+}
+
+function submitWord() {
+  const word = wordInput.value.trim().toUpperCase();
+  wordInput.value = '';
+  if (!word) return;
+
+  const player = players.find(p => p.letters.some(l => word.startsWith(l)));
+  if (!player) return;
+  if (responses.some(r => r.player === player.name)) return;
+
+  responses.push({ player: player.name, word });
+  safePlay('success');
+  responsesDiv.innerHTML += `<div>${player.name}: ${word}</div>`;
+}
+
+function applyRound() {
+  responses.forEach(r => {
+    const p = players.find(pl => pl.name === r.player);
+    const letter = p.letters.find(l => r.word.startsWith(l));
+    if (!letter) return;
+    p.letters.splice(p.letters.indexOf(letter), 1);
+    p.score++;
+  });
+
+  const winnerPlayer = players.find(p => p.letters.length === 0);
+  if (winnerPlayer) endGame();
+  else {
+    dealLetters();
+    nextRound();
+  }
+}
+
+function endGame() {
+  game.classList.add('hidden');
+  final.classList.remove('hidden');
+
+  players.sort((a,b) => b.score - a.score);
+  winner.textContent = players[0].name;
+  ranking.innerHTML = players.map((p,i)=>`<li>${i+1}. ${p.name} (${p.score})</li>`).join('');
+
+  penalty.textContent = `🍾 Penalización para ${players[players.length-1].name}: ¡canta, baila o brinda!`;
+  safePlay('win');
+  confetti({ particleCount: 300, spread: 120 });
+}
+</script>
+</body>
+</html>
