@@ -1,41 +1,36 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuickMadu – Ultimate Party Edition</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: { neon: '#39ff14', pink: '#ff007f', blue: '#00f0ff' }
-        }
-      }
-    }
-  </script>
-  <!-- Firebase -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
-    import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QuickMadu – Ultimate Party Edition</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { colors: { neon: '#39ff14', pink: '#ff007f', blue: '#00f0ff' } } }
+  }
+</script>
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-database.js";
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyBnkdxpXmJonY_S_mXxllyK6D5P_P_Dwt0",
-      authDomain: "quickmadu-family.firebaseapp.com",
-      projectId: "quickmadu-family",
-      storageBucket: "quickmadu-family.firebasestorage.app",
-      messagingSenderId: "732997553318",
-      appId: "1:732997553318:web:1c9d37834f1a0ba421f867"
-    };
+const firebaseConfig = {
+  apiKey: "AIzaSyBnkdxpXmJonY_S_mXxllyK6D5P_P_Dwt0",
+  authDomain: "quickmadu-family.firebaseapp.com",
+  projectId: "quickmadu-family",
+  storageBucket: "quickmadu-family.firebasestorage.app",
+  messagingSenderId: "732997553318",
+  appId: "1:732997553318:web:1c9d37834f1a0ba421f867"
+};
 
-    const app = initializeApp(firebaseConfig);
-    const db = getDatabase(app);
-
-    window.firebaseDB = db; // Hacemos accesible globalmente para el juego
-  </script>
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+window.firebaseDB = db; // global
+</script>
 </head>
 <body class="bg-gradient-to-br from-pink-500 via-blue-400 to-neon min-h-screen flex items-center justify-center p-4">
 
@@ -88,104 +83,52 @@
 </div>
 
 <script>
-// ================== CONFIGURACIÓN ==================
-const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
-let themes = ['Algo que hay en la cocina', 'Un animal', 'Algo que da miedo', 'Algo que te haga reír'];
-let players = [];
-let responses = [];
-let timeLeft = 15;
-let timer;
-let audioEnabled = false;
+const alphabet='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+let themes=['Algo que hay en la cocina','Un animal','Algo que da miedo','Algo que te haga reír'];
+let players=[],responses=[],timeLeft=15,timer;
+const timerEl=document.getElementById('timer');
 
-// QR dinámico para móviles
-new QRCode(document.getElementById('qr'), {
-  text: window.location.href,
-  width: 180,
-  height: 180
-});
+// Detectar partidaID desde URL o crear uno al iniciar
+let partidaID = new URLSearchParams(window.location.search).get('id') || null;
 
-function toggleDarkMode() { document.body.classList.toggle('dark'); }
+function toggleDarkMode(){document.body.classList.toggle('dark');}
+function addPlayer(){const name=playerName.value.trim();if(!name)return;players.push({name,letters:[],score:0});playerName.value='';renderPlayers();}
+function renderPlayers(){playerList.innerHTML=players.map(p=>`<li>• ${p.name}</li>`).join('');}
+function addTheme(){const t=newTheme.value.trim();if(t)themes.push(t);newTheme.value='';}
 
-function addPlayer() {
-  const name = playerName.value.trim();
-  if (!name) return;
-  players.push({ name, letters: [], score: 0 });
-  playerName.value = '';
-  renderPlayers();
+function startGame(){
+  if(players.length<2)return alert('Mínimo 2 jugadores');
+  setup.classList.add('hidden'); game.classList.remove('hidden');
+  if(!partidaID){ partidaID=Math.random().toString(36).substring(2,8); window.partidaID=partidaID;}
+  // QR con ID dinámico
+  const qrURL=window.location.href.split('?')[0]+'?id='+partidaID;
+  new QRCode(document.getElementById('qr'),{text:qrURL,width:180,height:180});
+  dealLetters(); nextRound();
 }
 
-function renderPlayers() { playerList.innerHTML = players.map(p => `<li>• ${p.name}</li>`).join(''); }
-function addTheme() { const t = newTheme.value.trim(); if (t) themes.push(t); newTheme.value = ''; }
+function dealLetters(){players.forEach(p=>{p.letters=[];for(let i=0;i<5;i++)p.letters.push(alphabet[Math.floor(Math.random()*alphabet.length)]);});}
 
-function startGame() {
-  if (players.length < 2) return alert('Mínimo 2 jugadores');
-  setup.classList.add('hidden');
-  game.classList.remove('hidden');
-  dealLetters();
-  nextRound();
-  saveGameToFirebase();
-}
+function nextRound(){responses=[];theme.textContent='🎯 '+themes[Math.floor(Math.random()*themes.length)];letters.innerHTML=players.map(p=>`<strong>${p.name}:</strong> ${p.letters.join(' ')}<br>`).join('');responsesDiv.innerHTML='';startTimer();saveGameToFirebase();}
 
-function dealLetters() { players.forEach(p => { p.letters = []; for (let i=0;i<5;i++) p.letters.push(alphabet[Math.floor(Math.random()*alphabet.length)]); }); }
+function startTimer(){clearInterval(timer);timeLeft=15;timerEl.textContent='⏱ '+timeLeft;timer=setInterval(()=>{timeLeft--;timerEl.textContent='⏱ '+timeLeft;if(timeLeft<=0){clearInterval(timer);applyRound();}},1000);}
 
-function nextRound() {
-  responses = [];
-  theme.textContent = '🎯 ' + themes[Math.floor(Math.random()*themes.length)];
-  letters.innerHTML = players.map(p => `<strong>${p.name}:</strong> ${p.letters.join(' ')}<br>`).join('');
-  responses.innerHTML = '';
-  startTimer();
-  saveGameToFirebase();
-}
+function submitWord(){const word=wordInput.value.trim().toUpperCase();wordInput.value='';if(!word)return;const player=players.find(p=>p.letters.some(l=>word.startsWith(l)));if(!player)return;if(responses.some(r=>r.player===player.name))return;responses.push({player:player.name,word});responsesDiv.innerHTML+=`<div>${player.name}: ${word}</div>`;saveGameToFirebase();}
 
-function startTimer() {
-  clearInterval(timer);
-  timeLeft = 15;
-  timer = setInterval(() => { timeLeft--; timerEl.textContent='⏱ '+timeLeft; if(timeLeft<=0){clearInterval(timer); applyRound();} },1000);
-}
+function applyRound(){responses.forEach(r=>{const p=players.find(pl=>pl.name===r.player);const letter=p.letters.find(l=>r.word.startsWith(l));if(!letter)return;p.letters.splice(p.letters.indexOf(letter),1);p.score++;});const winnerPlayer=players.find(p=>p.letters.length===0);if(winnerPlayer)endGame();else{dealLetters();nextRound();}}
 
-function submitWord() {
-  const word = wordInput.value.trim().toUpperCase();
-  wordInput.value='';
-  if(!word) return;
-  const player = players.find(p=>p.letters.some(l=>word.startsWith(l)));
-  if(!player) return;
-  if(responses.some(r=>r.player===player.name)) return;
-  responses.push({player:player.name, word});
-  responsesDiv.innerHTML += `<div>${player.name}: ${word}</div>`;
-  saveGameToFirebase();
-}
-
-function applyRound(){
-  responses.forEach(r=>{ const p = players.find(pl=>pl.name===r.player); const letter = p.letters.find(l=>r.word.startsWith(l)); if(!letter) return; p.letters.splice(p.letters.indexOf(letter),1); p.score++;});
-  const winnerPlayer = players.find(p=>p.letters.length===0);
-  if(winnerPlayer) endGame(); else {dealLetters(); nextRound();}
-}
-
-function endGame(){
-  game.classList.add('hidden'); final.classList.remove('hidden');
-  players.sort((a,b)=>b.score-a.score);
-  winner.textContent=players[0].name;
-  ranking.innerHTML=players.map((p,i)=>`<li>${i+1}. ${p.name} (${p.score})</li>`).join('');
-  penalty.textContent=`🍾 Penalización para ${players[players.length-1].name}: ¡canta, baila o brinda!`;
-  confetti({particleCount:300, spread:120});
-}
+function endGame(){game.classList.add('hidden');final.classList.remove('hidden');players.sort((a,b)=>b.score-a.score);winner.textContent=players[0].name;ranking.innerHTML=players.map((p,i)=>`<li>${i+1}. ${p.name} (${p.score})</li>`).join('');penalty.textContent=`🍾 Penalización para ${players[players.length-1].name}: ¡canta, baila o brinda!`;confetti({particleCount:300,spread:120});}
 
 // ================== FIREBASE ==================
 function saveGameToFirebase(){
-  const gameData = {players, theme: theme.textContent, responses};
-  const partidaID = 'default'; // Para una sola partida familiar, o generar ID dinámico
+  const gameData={players,theme:theme.textContent,responses};
   set(ref(window.firebaseDB,'partidas/'+partidaID),gameData);
 }
 
 // Escuchar cambios en tiempo real
-const partidaID='default';
-onValue(ref(window.firebaseDB,'partidas/'+partidaID),(snapshot)=>{
-  const data=snapshot.val();
-  if(!data) return;
-  players=data.players||players;
-  theme.textContent=data.theme||theme.textContent;
-  responsesDiv.innerHTML='';
-  (data.responses||[]).forEach(r=>responsesDiv.innerHTML+=`<div>${r.player}: ${r.word}</div>`);
+onValue(ref(window.firebaseDB,'partidas/'+partidaID || 'default'),snapshot=>{
+  const data=snapshot.val(); if(!data) return;
+  players=data.players||players; theme.textContent=data.theme||theme.textContent;
+  responsesDiv.innerHTML=''; (data.responses||[]).forEach(r=>responsesDiv.innerHTML+=`<div>${r.player}: ${r.word}</div>`);
   renderPlayers();
 });
 </script>
